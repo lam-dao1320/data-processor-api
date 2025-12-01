@@ -12,7 +12,7 @@ CLEAN_CONTAINER_NAME = 'cleaned-datasets'
 CLEAN_BLOB_NAME = 'All_Diets_Cleaned.csv'
 
 # Initialize the Function App using the V2 programming model
-app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+app = func.FunctionApp()
 
 # --- BLOB TRIGGER FUNCTION ---
 @app.blob_trigger(
