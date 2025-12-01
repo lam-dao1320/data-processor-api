@@ -33,7 +33,7 @@ def ProcessNewDietData(myblob: func.InputStream):
 
     try:
         # --- 1. Read Raw Data from Trigger Stream ---
-        stream = myblob.read()
+        stream = io.BytesIO(myblob.read())
         df = pd.read_csv(stream)
         
         logging.info(f"Raw data loaded. Shape: {df.shape}")
