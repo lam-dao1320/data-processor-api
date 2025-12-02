@@ -1,15 +1,5 @@
-# Uncomment to enable Azure Monitor OpenTelemetry
-# Ref: aka.ms/functions-azure-monitor-python 
-# azure-monitor-opentelemetry 
-
-# Core data processing libraries:
+# Pinning known compatible versions for Azure Functions
+azure-core==1.28.0 
+azure-storage-blob==12.16.0
+azure-functions==1.24.0 # Optional, but good practice
 pandas
-matplotlib
-seaborn
-# Other data science dependencies (if you used numpy or other specific analysis tools)
-
-# Azure connectivity libraries (for reading data from Blob Storage):
-azure-storage-blob 
-
-# Azure Functions default dependency (often included automatically, but good to list):
-azure-functions

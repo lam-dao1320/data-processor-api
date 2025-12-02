@@ -7,7 +7,7 @@ import logging
 
 # --- Configuration Constants ---
 # NOTE: The connection string is read from Application Settings: DATA_STORAGE_CONNECTION
-CONTAINER_NAME = 'datasets' 
+CLEAN_CONTAINER_NAME = 'cleaned-datasets' 
 # CRITICAL FIX: Use a static name to ensure the file is overwritten
 CLEAN_BLOB_NAME = 'All_Diets_Cleaned.csv'
 
@@ -55,7 +55,7 @@ def ProcessNewDietData(myblob: func.InputStream):
             
         blob_service_client = BlobServiceClient.from_connection_string(connect_str)
         
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        container_client = blob_service_client.get_container_client(CLEAN_CONTAINER_NAME)
         
         # --- CRITICAL CHANGE: Use the static output name ---
         output_blob_name = CLEAN_BLOB_NAME 
@@ -68,7 +68,7 @@ def ProcessNewDietData(myblob: func.InputStream):
         blob_client = container_client.get_blob_client(output_blob_name)
         blob_client.upload_blob(output_stream.getvalue(), overwrite=True)
         
-        logging.info(f"Successfully uploaded cleaned data, overwriting old file at: {CONTAINER_NAME}/{output_blob_name}")
+        logging.info(f"Successfully uploaded cleaned data, overwriting old file at: {CLEAN_CONTAINER_NAME}/{output_blob_name}")
         
     except Exception as e:
         logging.error(f"Error processing blob data: {e}")
