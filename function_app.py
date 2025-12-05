@@ -3,37 +3,42 @@ from azure.storage.blob import BlobServiceClient
 import pandas as pd
 import io
 import os
+import json
 import logging
 
-# --- Configuration Constants ---
-# NOTE: The connection string is read from Application Settings: DATA_STORAGE_CONNECTION
-CLEAN_CONTAINER_NAME = 'cleaned-datasets' 
-# CRITICAL FIX: Use a static name to ensure the file is overwritten
-CLEAN_BLOB_NAME = 'All_Diets_Cleaned.csv'
-
 # Initialize the Function App using the V2 programming model
-app = func.FunctionApp()
+app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
-# --- BLOB TRIGGER FUNCTION ---
-@app.blob_trigger(
-    arg_name="myblob", 
-    path="datasets/All_Diets.csv", 
-    connection="DATA_STORAGE_CONNECTION" # Uses the secret key to monitor the container
-)
-def ProcessNewDietData(myblob: func.InputStream):
-    """
-    Function triggered automatically when the All_Diets.csv file is created or updated in the 'datasets' container.
-    It reads the file, performs cleaning, and saves the cleaned data to a NEW FILE NAME in a different container, overwriting the old clean data.
-    """
-    logging.info(f"Python Blob trigger function started processing blob:\n"
-                 f"  Name: {myblob.name}\n"
-                 f"  URI: {myblob.uri}\n"
-                 f"  Length: {myblob.length} bytes")
+@app.route(route="DataProcessorApi")
 
+def DataProcessorApi(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    HTTP Trigger function to read nutritional data from Azure Blob Storage, process it using pandas, and return the average macronutrients as JSON.
+    """
     try:
-        # --- 1. Read Raw Data from Trigger Stream ---
-        stream = io.BytesIO(myblob.read())
-        df = pd.read_csv(stream)
+        # --- 1. Get Connection String (Replaces hardcoded Azurite string) ---
+        # NOTE: This retrieves the connection string from Azure Function App Settings.
+        connect_str = os.environ.get('DATA_STORAGE_CONNECTION')
+        if not connect_str:
+            return func.HttpResponse(
+                "DATA_STORAGE_CONNECTION environment variable not found.",
+                status_code=500
+            )
+
+        # --- 2. Blob Storage Setup ---
+        blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+
+        # Define the container and blob names (as used in process_nutrition_data.py)
+        container_name = 'datasets'
+        blob_name = 'All_Diets.csv'
+
+        container_client = blob_service_client.get_container_client(container_name)
+        blob_client = container_client.get_blob_client(blob_name)
+
+        # --- 3. Download and Load Data (Core logic from process_nutrition_data.py) ---
+        # Download blob content to bytes
+        stream = blob_client.download_blob().readall()
+        df = pd.read_csv(io.BytesIO(stream))
         
         logging.info(f"Raw data loaded. Shape: {df.shape}")
 
@@ -44,31 +49,24 @@ def ProcessNewDietData(myblob: func.InputStream):
         df_cleaned[numeric_cols] = df_cleaned[numeric_cols].fillna(df_cleaned[numeric_cols].mean())
         df_cleaned[numeric_cols] = df_cleaned[numeric_cols].clip(lower=0)
         
-        logging.info(f"Data cleaned. New Shape: {df_cleaned.shape}")
+        logging.info(f"Successfully uploaded cleaned. New Shape: {df_cleaned.shape}")
+        
 
-        # --- 3. Write Cleaned Data to New Blob Storage (Overwrites Old File) ---
-        
-        connect_str = os.environ.get("DATA_STORAGE_CONNECTION")
-        if not connect_str:
-            logging.error("DATA_STORAGE_CONNECTION environment variable not found.")
-            return
-            
-        blob_service_client = BlobServiceClient.from_connection_string(connect_str)
-        
-        container_client = blob_service_client.get_container_client(CLEAN_CONTAINER_NAME)
-        
-        # --- CRITICAL CHANGE: Use the static output name ---
-        output_blob_name = CLEAN_BLOB_NAME 
-        
-        # Convert DataFrame back to CSV format in memory
-        output_stream = io.StringIO()
-        df_cleaned.to_csv(output_stream, index=False)
-        
-        # Upload the stream, using overwrite=True to replace the old clean file
-        blob_client = container_client.get_blob_client(output_blob_name)
-        blob_client.upload_blob(output_stream.getvalue(), overwrite=True)
-        
-        logging.info(f"Successfully uploaded cleaned data, overwriting old file at: {CLEAN_CONTAINER_NAME}/{output_blob_name}")
-        
+        # --- 3. Return Cleaned Data ---
+        # Convert the final DataFrame to a list of dictionaries for JSON output
+        results_json = df_cleaned.to_dict(orient='records')
+
+        return func.HttpResponse(
+            # Return the processed data as a JSON string
+            json.dumps(results_json),
+            mimetype="application/json",
+            status_code=200
+        )
+
     except Exception as e:
-        logging.error(f"Error processing blob data: {e}")
+        # Log the error and return a 500 status code
+        print(f"An unexpected error occurred: {e}")
+        return func.HttpResponse(
+            f"Error processing data: {str(e)}",
+            status_code=500
+        )
