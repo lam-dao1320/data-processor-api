@@ -15,6 +15,13 @@ def DataProcessorApi(req: func.HttpRequest) -> func.HttpResponse:
     """
     HTTP Trigger function to read nutritional data from Azure Blob Storage, process it using pandas, and return the average macronutrients as JSON.
     """
+
+    # Define CORS headers for local development
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*", 
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
     try:
         # --- 1. Get Connection String (Replaces hardcoded Azurite string) ---
         # NOTE: This retrieves the connection string from Azure Function App Settings.
@@ -22,7 +29,8 @@ def DataProcessorApi(req: func.HttpRequest) -> func.HttpResponse:
         if not connect_str:
             return func.HttpResponse(
                 "DATA_STORAGE_CONNECTION environment variable not found.",
-                status_code=500
+                status_code=500,
+                headers=cors_headers
             )
 
         # --- 2. Blob Storage Setup ---
@@ -60,7 +68,8 @@ def DataProcessorApi(req: func.HttpRequest) -> func.HttpResponse:
             # Return the processed data as a JSON string
             json.dumps(results_json),
             mimetype="application/json",
-            status_code=200
+            status_code=200,
+            headers=cors_headers
         )
 
     except Exception as e:
@@ -68,5 +77,6 @@ def DataProcessorApi(req: func.HttpRequest) -> func.HttpResponse:
         print(f"An unexpected error occurred: {e}")
         return func.HttpResponse(
             f"Error processing data: {str(e)}",
-            status_code=500
+            status_code=500,
+            headers=cors_headers
         )
